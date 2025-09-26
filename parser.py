@@ -12,7 +12,7 @@ class Parser:
         self.login: str = os.getenv('LOGIN')
         self.password: str = os.getenv('PASSWORD')
         self.phone_num: str = os.getenv('PHONE_NUMB')
-        self.time_delay: int = 180
+        self.time_delay: int = 10
 
         self.conn = sqlite3.connect("projects.db")
         self.cursor = self.conn.cursor()
@@ -25,7 +25,8 @@ class Parser:
             title TEXT NOT NULL,
             price INTEGER NOT NULL,
             possible_price_limit INTEGER,
-            description TEXT
+            description TEXT,
+            already_sent BOOLEAN NOT NULL DEFAULT 0
         )
         ''')
         self.conn.commit()
@@ -34,14 +35,12 @@ class Parser:
         self.cursor.execute("SELECT 1 FROM projects WHERE id = ?", (project.id,))
         if self.cursor.fetchone() is None:
             self.cursor.execute(
-                "INSERT INTO projects (id, title, price, possible_price_limit, description) "
-                "VALUES (?, ?, ?, ?, ?)",
-                (project.id, project.title, project.price, project.possible_price_limit, project.description)
+                "INSERT INTO projects (id, title, price, possible_price_limit, description, already_sent) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (project.id, project.title, project.price, project.possible_price_limit, project.description, 0)
             )
             self.conn.commit()
             print(f"Добавлен проект: {project.title}")
-        else:
-            print(f"Проект уже существует: {project.title}")
 
     def _close_database(self):
         self.cursor.close()
@@ -51,11 +50,11 @@ class Parser:
         api: Kwork = Kwork(login=self.login, password=self.password, phone_last=self.phone_num)
 
         try:
-            while True:
-                projects: list[Project] = await api.get_projects([41, 80, 40])
+            print("Поиск проектов запущен...")
+            projects: list[Project] = await api.get_projects([41, 80, 40])
 
-                for project in projects:
-                    self._add_to_database(project)
+            for project in projects:
+                self._add_to_database(project)
 
                 await asyncio.sleep(self.time_delay)
 
@@ -63,5 +62,3 @@ class Parser:
             print(e)
         finally:
             self._close_database()
-
-asyncio.run(Parser().parse())
