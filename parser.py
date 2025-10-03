@@ -6,14 +6,15 @@ from kwork import Kwork
 from kwork.exceptions import KworkException
 from kwork.types import Project
 
+
 class Parser:
     def __init__(self) -> None:
         load_dotenv()
         self.login: str = os.getenv('LOGIN')
         self.password: str = os.getenv('PASSWORD')
         self.phone_num: str = os.getenv('PHONE_NUMB')
-        self.time_delay: int = 10
-        self.db = None
+        self.time_delay: int = 30
+        self.db: aiosqlite.Connection | None = None
 
     async def init(self) -> None:
         self.db = await aiosqlite.connect("projects.db")
@@ -45,23 +46,18 @@ class Parser:
             await self.db.commit()
             print(f"Добавлен проект: {project.title}")
 
-    async def _close_database(self) -> None:
-        await self.db.close()
-
     async def parse(self) -> None:
         api: Kwork = Kwork(login=self.login, password=self.password, phone_last=self.phone_num)
-
+        print("Парсер запущен...")
         try:
-            print("Поиск проектов запущен...")
-            projects: list[Project] = await api.get_projects([41, 80, 40])
-
-            for project in projects:
-                await self._add_to_database(project)
-
-                await asyncio.sleep(self.time_delay)
-
-        except KworkException as e:
-            print(e)
+            while True:
+                try:
+                    projects: list[Project] = await api.get_projects([41, 80, 40])
+                    for project in projects:
+                        await self._add_to_database(project)
+                    await asyncio.sleep(self.time_delay)
+                except KworkException as e:
+                    print(f"Ошибка парсинга: {e}")
+                    await asyncio.sleep(30)
         finally:
             await api.close()
-            await self._close_database()
